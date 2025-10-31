@@ -6,12 +6,8 @@
     .dependencies = .{},
 
     .paths = .{
-        "build.zig",
         "build.zig.zon",
-        "examples",
-        "internals",
-        "test.zig",
-        "sacrilege.zig",
+        "src",
         "README.md",
     },
 }
