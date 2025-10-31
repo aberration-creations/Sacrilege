@@ -10,8 +10,8 @@
         "build.zig.zon",
         "examples",
         "internals",
-        // For example...
-        //"LICENSE",
-        //"README.md",
+        "test.zig",
+        "sacrilege.zig",
+        "README.md",
     },
 }
