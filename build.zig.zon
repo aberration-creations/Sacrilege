@@ -1,0 +1,17 @@
+.{
+    .name = .Sacrilege,
+    .version = "0.0.0",
+    .fingerprint = 0xf1890f710d437d88,
+    .minimum_zig_version = "0.15.2",
+    .dependencies = .{},
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "examples",
+        "internals",
+        // For example...
+        //"LICENSE",
+        //"README.md",
+    },
+}

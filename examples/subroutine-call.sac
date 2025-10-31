@@ -1,0 +1,8 @@
+
+(set a 13)
+
+(defun myfun (set a 42))
+
+(assert (eq (get a), 13))
+(eval (get myfun))
+(assert (eq (get a), 42))

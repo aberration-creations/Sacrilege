@@ -1,0 +1,4 @@
+(set a 10)
+(set b 32)
+(set c (sum (get a) (get b)))
+(assert (eq (get c) 42))

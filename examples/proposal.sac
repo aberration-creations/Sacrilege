@@ -1,0 +1,28 @@
+(defun registerReloadable (
+    (print "registering reloadables")
+    (watchfile "src/sacrilege/test.sac")
+    (watchfile "src/shaders/include.hlsli")
+    (watchfile "src/shaders/triangle.vert")
+    (watchfile "src/shaders/triangle.frag")))
+
+(defun onstart (
+    (eval (get registerReloadable))
+    (print "Sacrilege successfully initiated")))
+
+(defun onreload (
+    (print "file changed:")
+    (print (get changedpath))
+    (print "futsk me tender")
+    (eval (get registerReloadable))))
+
+(defrendercall 
+    (setcallname "faiaiasz")
+    (setframerange 0.0 1.0) 
+    (setmesh "something.hmesh" 9000) 
+    (setshader "" "src/shaders/triangle.frag.spv")
+    )
+(defrendercall "faiaiasz1" 0.0 1.0 "something.hmesh" 9000 "" "src/shaders/triangle.frag.spv")
+(defrendercall "faiaiasz2" 0.0 1.0 "something.hmesh" 9000 "" "src/shaders/triangle.frag.spv")
+(defrendercall "faiaiasz3" 0.0 1.0 "something.hmesh" 9000 "" "src/shaders/triangle.frag.spv")
+(defrendercall "faiaiasz4" 0.0 1.0 "something.hmesh" 9000 "" "src/shaders/triangle.frag.spv")
+(defrendercall "faiaiasz5" 0.0 1.0 "something.hmesh" 9000 "" "src/shaders/triangle.frag.spv")

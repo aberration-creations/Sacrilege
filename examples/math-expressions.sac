@@ -1,0 +1,16 @@
+
+(assert (eq (sum 13) 13))
+(assert (eq (sum 27 3) 30))
+(assert (eq (sum 0 1 2 3 4) 10))
+
+(assert (eq (sub 10) 10))
+(assert (eq (sub 100 4) 96))
+(assert (eq (sub 100 10 20) 70))
+
+(assert (eq (mult 10) 10))
+(assert (eq (mult 3 4) 12))
+(assert (eq (mult 3 4 5) 60))
+
+(assert (eq (div 10) 10))
+(assert (eq (div 10 2) 5))
+(assert (eq (div 100 2 2) 25))
