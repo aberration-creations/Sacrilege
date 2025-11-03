@@ -34,6 +34,7 @@ test "example files run without errors" {
     try testRunFile("./examples/basic-expression.sac");
     try testRunFile("./examples/context-get-set.sac");
     try testRunFile("./examples/subroutine-call.sac");
+    try testRunFile("./examples/defun-tests.sac");
     try testRunFile("./examples/math-expressions.sac");
 }
 

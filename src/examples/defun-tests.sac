@@ -1,0 +1,25 @@
+
+;; defun tests for Sacrilege
+
+;; basic parameter and return
+(defun double (x)
+    (mult 2 x))
+(assert (eq (double 5) 10))
+
+;; function that mutates context via set/get
+(set a 13)
+(defun set-a ()
+    (set a 42))
+(assert (eq (get a) 13))
+(eval (get set-a))
+(assert (eq (get a) 42))
+
+;; zero-arg function returns empty expression
+(defun empty-fn ()
+    (set tmp 1))
+(eval (get empty-fn))
+(assert (eq (get tmp) 1))
+
+;; arity checks: calling with wrong count should raise later when implemented
+;; (these will be used to guide implementation)
+
