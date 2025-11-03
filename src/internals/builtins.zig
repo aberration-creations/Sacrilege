@@ -110,6 +110,7 @@ fn builtin_print(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror
         }
     }
     try stdout.print("\n", .{});
+    try stdout.flush();
     return builtin_empty(allocator);
 }
 
