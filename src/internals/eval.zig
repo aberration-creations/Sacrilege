@@ -23,7 +23,7 @@ pub fn eval(
 ) !Node {
     switch (node) {
         NodeType.atom => {
-            return node.copy();
+            return node.copy(allocator);
         },
         NodeType.sexpr => {
             // Apply lazy evaluation rules for some of the builtin expressions.
@@ -43,10 +43,10 @@ pub fn eval(
             var evald = Node{ .sexpr = std.ArrayList(Node).empty };
             for (node.sexpr.items) |arg| {
                 errdefer {
-                    evald.deinit();
+                    evald.deinit(allocator);
                 }
                 const earg = try eval(ctx, allocator, arg);
-                try evald.sexpr.append(earg);
+                try evald.sexpr.append(allocator, earg);
             }
 
             if (evald.sexpr.items.len != 0 and evald.sexpr.items[0] == NodeType.atom) {
@@ -60,7 +60,7 @@ pub fn eval(
                         idn,
                         "eval",
                     )) {
-                        defer evald.deinit();
+                        defer evald.deinit(allocator);
                         try ctx.ensure_argument_count(evald, 1);
                         try ctx.ensure_argument_nodetype(evald, 0, .sexpr);
 
@@ -81,7 +81,7 @@ pub fn eval(
                     // Not an eval call - try resolving the identifier using the eager
                     // function dictionary.
                     const idfo = ctx.funcs.get(idn);
-                    defer evald.deinit();
+                    defer evald.deinit(allocator);
 
                     if (idfo) |idf| {
                         // Evaluate it.

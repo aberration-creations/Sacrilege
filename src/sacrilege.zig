@@ -16,8 +16,8 @@ pub const Tokenizer = sac.Tokenizer;
 pub const TokenType = sac.TokenType;
 
 pub fn parseRawSource(raw: []const u8, allocator: std.mem.Allocator) !sac.Node {
-    var tokenizer = sac.Tokenizer.init(allocator);
-    defer tokenizer.deinit();
+    var tokenizer = sac.Tokenizer.init();
+    defer tokenizer.deinit(allocator);
     try tokenizer.tokenize(allocator, raw);
 
     var ntokparsed: usize = 0;
@@ -66,13 +66,15 @@ test "eval set not identifier" {
 }
 
 test "no memory leak when same value is set twice" {
+    const allocator = std.testing.allocator;
     var ctx = try testGetContextAfterRuningRaw("(set a 42)(set a 76)");
-    defer ctx.deinit();
+    defer ctx.deinit(allocator);
 }
 
 fn testExecutionError(source: []const u8, errorType: sac.EvalError, errorContent: []const u8) !void {
+    const allocator = std.testing.allocator;
     var ctx = try testGetContextAfterRuningRaw(source);
-    defer ctx.deinit();
+    defer ctx.deinit(allocator);
     try std.testing.expectEqual(true, ctx.is_error);
     try std.testing.expectEqual(errorType, ctx.error_type);
     try std.testing.expectEqualStrings(errorContent, ctx.error_content);
@@ -81,13 +83,13 @@ fn testExecutionError(source: []const u8, errorType: sac.EvalError, errorContent
 fn testGetContextAfterRuningRaw(raw: []const u8) !sac.Context {
     const allocator = std.testing.allocator;
     var node = try parseRawSource(raw, allocator);
-    defer node.deinit();
+    defer node.deinit(allocator);
 
     var ctx = try sac.Context.init(allocator);
-    errdefer ctx.deinit();
+    errdefer ctx.deinit(allocator);
 
     if (sac.eval(&ctx, allocator, node)) |result| {
-        result.deinit();
+        result.deinit(allocator);
     } else |err| {
         if (!ctx.is_error) {
             return err; // not an eval error
@@ -107,13 +109,13 @@ fn testRunImpl(path: []const u8, raw: []const u8) !void {
     }
     const allocator = std.testing.allocator;
     var node = try parseRawSource(raw, allocator);
-    defer node.deinit();
+    defer node.deinit(allocator);
 
     var ctx = try sac.Context.init(allocator);
-    defer ctx.deinit();
+    defer ctx.deinit(allocator);
 
-    if (sac.eval(&ctx, allocator, node)) |result| {
-        result.deinit();
+    if (sac.eval(&ctx, allocator, node)) |*result| {
+        result.deinit(allocator);
     } else |err| {
         if (ctx.is_error) {
             ctx.debugPrintError(path);

@@ -29,17 +29,18 @@ pub const Context = struct {
 
     pub fn deinit(
         self: *Self,
+        allocator: std.mem.Allocator,
     ) void {
         var keys = self.ids.keyIterator();
         while (keys.next()) |key| {
-            if (self.ids.get(key.*)) |node| {
-                node.deinit();
+            if (self.ids.get(key.*)) |*node| {
+                node.deinit(allocator);
             }
         }
-        for (self.strings.items) |str| {
-            str.deinit();
+        for (self.strings.items) |*str| {
+            str.deinit(allocator);
         }
-        self.strings.deinit();
+        self.strings.deinit(allocator);
         self.funcs.clearAndFree();
         self.lazy_funcs.clearAndFree();
         self.ids.clearAndFree();
@@ -57,7 +58,7 @@ pub const Context = struct {
             .strings = std.ArrayList(std.ArrayList(u8)).empty,
             .context_id = context_id_counter,
         };
-        errdefer ctx.deinit();
+        errdefer ctx.deinit(allocator);
         try sac.registerBuiltins(&ctx);
         return ctx;
     }

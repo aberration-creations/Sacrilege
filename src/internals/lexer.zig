@@ -48,11 +48,12 @@ pub const Token = struct {
     }
 
     pub fn init_with_content(
+        allocator: std.mem.Allocator,
         name: []const u8,
         token_type: TokenType,
     ) !Self {
         var rc = std.ArrayList(u8).empty;
-        try rc.appendSlice(name);
+        try rc.appendSlice(allocator, name);
         return Self{
             .id = token_type,
             .pos = Position{ .line = 0, .char = 0 },
@@ -60,15 +61,15 @@ pub const Token = struct {
         };
     }
 
-    pub fn deinit(self: Self) void {
-        self.raw.deinit();
+    pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+        self.raw.deinit(allocator);
     }
 
-    pub fn copy(self: Self) !Self {
+    pub fn copy(self: Self, allocator: std.mem.Allocator) !Self {
         return Token{
             .id = self.id,
             .pos = self.pos,
-            .raw = try self.raw.clone(),
+            .raw = try self.raw.clone(allocator),
         };
     }
 
@@ -76,23 +77,23 @@ pub const Token = struct {
         std.debug.print("token: id: {}, raw: {s}\n", .{ self.id, self.raw.items });
     }
 
-    pub fn apply(self: *Token, c: u8) !bool {
+    pub fn apply(self: *Token, allocator: std.mem.Allocator, c: u8) !bool {
         switch (self.id) {
             TokenType.unassigned => {
                 switch (c) {
                     '(' => {
                         self.id = TokenType.paren_b;
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                     ')' => {
                         self.id = TokenType.paren_e;
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                     '0'...'9' => {
                         self.id = TokenType.number;
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                     '"' => {
@@ -101,12 +102,12 @@ pub const Token = struct {
                     },
                     'a'...'z' => {
                         self.id = TokenType.identifier;
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                     'A'...'Z' => {
                         self.id = TokenType.identifier;
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                     '\'' => {
@@ -124,7 +125,7 @@ pub const Token = struct {
             TokenType.number => {
                 switch (c) {
                     '0'...'9' => {
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                     else => {
@@ -146,7 +147,7 @@ pub const Token = struct {
                         return true;
                     },
                     else => {
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                 }
@@ -155,23 +156,23 @@ pub const Token = struct {
                 self.id = TokenType.partial_string;
                 switch (c) {
                     'r' => {
-                        try self.raw.append('\r');
+                        try self.raw.append(allocator, '\r');
                         return true;
                     },
                     'n' => {
-                        try self.raw.append('\n');
+                        try self.raw.append(allocator, '\n');
                         return true;
                     },
                     '\\' => {
-                        try self.raw.append('\\');
+                        try self.raw.append(allocator, '\\');
                         return true;
                     },
                     't' => {
-                        try self.raw.append('\t');
+                        try self.raw.append(allocator, '\t');
                         return true;
                     },
                     else => {
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                 }
@@ -182,15 +183,15 @@ pub const Token = struct {
             TokenType.identifier => {
                 switch (c) {
                     'a'...'z' => {
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                     'A'...'Z' => {
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                     '0'...'9' => {
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                     else => {
@@ -209,7 +210,7 @@ pub const Token = struct {
                     '.',
                     ',',
                     => {
-                        try self.raw.append(c);
+                        try self.raw.append(allocator, c);
                         return true;
                     },
                     else => {
@@ -224,17 +225,17 @@ pub const Token = struct {
 pub const Tokenizer = struct {
     tokens: std.ArrayList(Token),
 
-    pub fn init(allocator: std.mem.Allocator) Tokenizer {
+    pub fn init() Tokenizer {
         return Tokenizer{
-            .tokens = std.ArrayList(Token).init(allocator),
+            .tokens = std.ArrayList(Token).empty,
         };
     }
 
-    pub fn deinit(self: Tokenizer) void {
-        for (self.tokens.items) |tok| {
-            tok.deinit();
+    pub fn deinit(self: *Tokenizer, allocator: std.mem.Allocator) void {
+        for (self.tokens.items) |*tok| {
+            tok.deinit(allocator);
         }
-        self.tokens.deinit();
+        self.tokens.deinit(allocator);
     }
 
     pub fn tokenize(
@@ -244,7 +245,7 @@ pub const Tokenizer = struct {
     ) !void {
         var charpos: u32 = 0;
         var linepos: u32 = 1;
-        var current: Token = try Token.init(allocator, 1, 1);
+        var current: Token = try Token.init(1, 1);
         for (input) |elem| {
             if (elem == '\n') {
                 linepos += 1;
@@ -253,14 +254,14 @@ pub const Tokenizer = struct {
                 charpos += 1;
             }
             const previd = current.id;
-            if (!try current.apply(elem)) {
+            if (!try current.apply(allocator, elem)) {
                 if (current.id != TokenType.unassigned) {
-                    try self.tokens.append(current);
+                    try self.tokens.append(allocator, current);
                 } else {
-                    current.deinit();
+                    current.deinit(allocator);
                 }
-                current = try Token.init(allocator, linepos, charpos);
-                _ = try current.apply(elem);
+                current = try Token.init(linepos, charpos);
+                _ = try current.apply(allocator, elem);
             } else {
                 if (previd == TokenType.unassigned and previd != current.id) {
                     current.pos.line = linepos;
@@ -269,9 +270,9 @@ pub const Tokenizer = struct {
             }
         }
         if (current.id != TokenType.unassigned) {
-            try self.tokens.append(current);
+            try self.tokens.append(allocator, current);
         } else {
-            current.deinit();
+            current.deinit(allocator);
         }
     }
 
@@ -297,29 +298,30 @@ test "token accept first char" {
 
 fn testTokenAccept(c: u8, result: bool, id: TokenType) !void {
     const allocator = std.testing.allocator;
-    var tok = try Token.init(allocator, 1, 1);
-    defer tok.deinit();
-    const val = try tok.apply(c);
+    var tok = try Token.init(1, 1);
+    defer tok.deinit(allocator);
+    const val = try tok.apply(allocator, c);
     try std.testing.expectEqual(result, val);
     try std.testing.expectEqual(id, tok.id);
 }
 
 test "empty tokenizerd deinit" {
     const allocator = std.testing.allocator;
-    var tokenizer = Tokenizer.init(allocator);
-    defer tokenizer.deinit();
+    var tokenizer = Tokenizer.init();
+    defer tokenizer.deinit(allocator);
 }
 
 test "tokenizer deinit after tokenize" {
     const allocator = std.testing.allocator;
-    var tokenizer = Tokenizer.init(allocator);
-    defer tokenizer.deinit();
+    var tokenizer = Tokenizer.init();
+    defer tokenizer.deinit(allocator);
     try tokenizer.tokenize(allocator, "()");
 }
 
 test "tokenzier tokens for basic function call" {
+    const allocator = std.testing.allocator;
     var t = try testTokenize("(add 20 40)");
-    defer t.deinit();
+    defer t.deinit(allocator);
     try expectTokenCount(t, 5);
     try expectToken(t, 0, "(", .paren_b);
     try expectToken(t, 1, "add", .identifier);
@@ -329,8 +331,9 @@ test "tokenzier tokens for basic function call" {
 }
 
 test "tokenzier with strings" {
+    const allocator = std.testing.allocator;
     var t = try testTokenize("(set title \"Sacrilege\")");
-    defer t.deinit();
+    defer t.deinit(allocator);
     try expectTokenCount(t, 5);
     try expectToken(t, 0, "(", .paren_b);
     try expectToken(t, 1, "set", .identifier);
@@ -340,51 +343,61 @@ test "tokenzier with strings" {
 }
 
 test "string can have space" {
+    const allocator = std.testing.allocator;
     var t = try testTokenize(
         \\ "text with space"
     );
-    defer t.deinit();
+    defer t.deinit(allocator);
     try expectToken(t, 0, "text with space", .string);
 }
 
 test "newline not allowed in strings" {
+    const allocator = std.testing.allocator;
     var t = try testTokenize(
         \\"text
         \\space"
     );
-    defer t.deinit();
+    defer t.deinit(allocator);
     try expectToken(t, 0, "text", .partial_string);
     try expectToken(t, 1, "space", .identifier);
     try expectToken(t, 2, "", .partial_string);
 }
 
 test "string can have symbols" {
+    const allocator = std.testing.allocator;
+
     var t = try testTokenize(
         \\ "!@#$%^&*()_+{}:<>?"
     );
-    defer t.deinit();
+    defer t.deinit(allocator);
     try expectToken(t, 0, "!@#$%^&*()_+{}:<>?", .string);
 }
 
 test "string can have escaped quotes" {
+    const allocator = std.testing.allocator;
+
     var t = try testTokenize(
         \\"text\"space\""
     );
-    defer t.deinit();
+    defer t.deinit(allocator);
     try expectToken(t, 0, "text\"space\"", .string);
 }
 
 test "string can have escaped tab, newline, backslash" {
+    const allocator = std.testing.allocator;
+
     var t = try testTokenize(
         \\"\ttext\r\nspace\\\\"
     );
-    defer t.deinit();
+    defer t.deinit(allocator);
     try expectToken(t, 0, "\ttext\r\nspace\\\\", .string);
 }
 
 test "tokenzier column position tracking" {
+    const allocator = std.testing.allocator;
+
     var t = try testTokenize("(set title \"Sacrilege\")");
-    defer t.deinit();
+    defer t.deinit(allocator);
     try expectTokenCount(t, 5);
     try expectTokenPosition(t, 0, "(", 1, 1);
     try expectTokenPosition(t, 1, "set", 1, 2);
@@ -392,8 +405,10 @@ test "tokenzier column position tracking" {
 }
 
 test "tokenzier line position tracking" {
+    const allocator = std.testing.allocator;
+
     var t = try testTokenize("(\n  set \n  title \n\"Sacrilege\")");
-    defer t.deinit();
+    defer t.deinit(allocator);
     try expectTokenCount(t, 5);
     try expectTokenPosition(t, 0, "(", 1, 1);
     try expectTokenPosition(t, 1, "set", 2, 3);
@@ -402,7 +417,7 @@ test "tokenzier line position tracking" {
 
 fn testTokenize(input: []const u8) !Tokenizer {
     const allocator = std.testing.allocator;
-    var tokenizer = Tokenizer.init(allocator);
+    var tokenizer = Tokenizer.init();
     try tokenizer.tokenize(allocator, input);
     return tokenizer;
 }

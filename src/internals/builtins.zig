@@ -57,14 +57,14 @@ pub fn builtin_false(allocator: std.mem.Allocator) anyerror!Node {
     return try make_identifier(allocator, "false");
 }
 
-pub fn builtin_empty() Node {
+pub fn builtin_empty(_: std.mem.Allocator) Node {
     return Node{ .sexpr = std.ArrayList(Node).empty };
 }
 
 fn builtin_assert(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
     try ctx.ensure_argument_count(node, 1);
-    const true_node = try builtin_true(allocator);
-    defer true_node.deinit();
+    var true_node = try builtin_true(allocator);
+    defer true_node.deinit(allocator);
     if (!node.sexpr.items[1].equal(true_node)) {
         return ctx.raise_error(EvalError.AssertionFailed, node.sexpr.items[0].atom, "assertion failed!", .{});
     }
@@ -96,7 +96,9 @@ fn builtin_gt(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!
 }
 
 fn builtin_print(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
-    const stdout = std.io.getStdOut().writer();
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
     for (node.sexpr.items[1..]) |item| {
         switch (item) {
             NodeType.atom => {
@@ -114,17 +116,17 @@ fn builtin_print(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror
 fn builtin_set(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
     try ctx.ensure_argument_count(node, 2);
     try ctx.ensure_argument_tokentype(node, 0, TokenType.identifier);
-    const key = try node.sexpr.items[1].atom.raw.clone();
-    const value = try node.sexpr.items[2].copy();
-    try ctx.strings.append(key);
-    if (ctx.ids.get(key.items)) |existing| {
-        existing.deinit();
+    const key = try node.sexpr.items[1].atom.raw.clone(allocator);
+    const value = try node.sexpr.items[2].copy(allocator);
+    try ctx.strings.append(allocator, key);
+    if (ctx.ids.get(key.items)) |*existing| {
+        existing.deinit(allocator);
     }
     try ctx.ids.put(key.items, value);
     return builtin_empty(allocator);
 }
 
-fn builtin_get(ctx: *Context, _: std.mem.Allocator, node: Node) anyerror!Node {
+fn builtin_get(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
     try ctx.ensure_argument_count(node, 1);
     if (node.sexpr.items[1] != NodeType.atom) {
         return ctx.raise_wrong_argument_node_type(node, TokenType.identifier);
@@ -134,7 +136,7 @@ fn builtin_get(ctx: *Context, _: std.mem.Allocator, node: Node) anyerror!Node {
     }
     const key = node.sexpr.items[1].atom.raw;
     if (ctx.ids.get(key.items)) |n| {
-        var result = try n.copy();
+        var result = try n.copy(allocator);
         if (result == NodeType.atom) {
             result.atom.pos = node.sexpr.items[0].atom.pos;
         }
@@ -153,12 +155,12 @@ fn node_to_i128(ctx: *Context, node: Node) !i128 {
 }
 
 fn make_number(allocator: std.mem.Allocator, num: i128, pos: Position) !Node {
-    var res = Node{ .atom = try Token.init(allocator, pos.line, pos.char) };
+    var res = Node{ .atom = try Token.init(pos.line, pos.char) };
     res.atom.id = TokenType.number;
 
     const ncu8 = try std.fmt.allocPrint(allocator, "{}", .{num});
     defer allocator.free(ncu8);
-    try res.atom.raw.appendSlice(ncu8);
+    try res.atom.raw.appendSlice(allocator, ncu8);
     return res;
 }
 
@@ -249,7 +251,7 @@ fn builtin_last(_: *Context, _: std.mem.Allocator, node: Node) anyerror!Node {
     return node.sexpr.items[1].sexpr.items[sl - 1];
 }
 
-fn builtin_append(_: *Context, _: std.mem.Allocator, node: Node) anyerror!Node {
+fn builtin_append(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
     if (node.sexpr.items[1] != NodeType.sexpr) {
         return EvalError.WrongArgumentType;
     }
@@ -258,7 +260,7 @@ fn builtin_append(_: *Context, _: std.mem.Allocator, node: Node) anyerror!Node {
     }
     var nl = node.sexpr.items[1]; // TODO arraylist clone?
     for (node.sexpr.items[2..]) |item| {
-        try nl.sexpr.append(item);
+        try nl.sexpr.append(allocator, item);
     }
     return nl;
 }
@@ -348,7 +350,7 @@ fn builtin_readfile(_: *Context, allocator: std.mem.Allocator, node: Node) anyer
 
     const raw = try file.readToEndAlloc(allocator, 1024 * 1024);
     var nc = std.ArrayList(u8).empty;
-    try nc.appendSlice(raw);
+    try nc.appendSlice(allocator, raw);
     return Node{ .atom = try Token.init_with_content(allocator, raw, .string) };
 }
 
@@ -362,8 +364,8 @@ fn builtin_parse(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror
     if (node.sexpr.items[1].atom.id != TokenType.string) {
         return EvalError.WrongArgumentType;
     }
-    var tokenizer = Tokenizer.init(allocator);
-    defer tokenizer.deinit();
+    var tokenizer = Tokenizer.init();
+    defer tokenizer.deinit(allocator);
     try tokenizer.tokenize(allocator, node.sexpr.items[1].atom.raw.items);
     var ntokparsed: usize = 0;
     return try parse(tokenizer.tokens.items, 0, &ntokparsed, allocator);
@@ -385,8 +387,8 @@ fn builtin_evalfile(ctx: *Context, allocator: std.mem.Allocator, node: Node) any
     defer file.close();
 
     const raw = try file.readToEndAlloc(allocator, 1024 * 1024);
-    var tokenizer = Tokenizer.init(allocator);
-    defer tokenizer.deinit();
+    var tokenizer = Tokenizer.init();
+    defer tokenizer.deinit(allocator);
     try tokenizer.tokenize(allocator, raw);
     var ntokparsed: usize = 0;
     const nparsed = try parse(tokenizer.tokens.items, 0, &ntokparsed, allocator);
@@ -413,11 +415,11 @@ fn builtin_lazy_foreach(ctx: *Context, allocator: std.mem.Allocator, node: Node)
         return EvalError.WrongArgumentType;
     }
 
-    var rslt = Node.new_sexpr(allocator);
+    var rslt = Node.new_sexpr();
     for (node.sexpr.items[2].sexpr.items) |item| {
         var evalNode = node.sexpr.items[1];
-        try evalNode.sexpr.append(try eval(ctx, allocator, item));
-        try rslt.sexpr.append(try eval(ctx, allocator, evalNode));
+        try evalNode.sexpr.append(allocator, try eval(ctx, allocator, item));
+        try rslt.sexpr.append(allocator, try eval(ctx, allocator, evalNode));
     }
     return rslt;
 }
@@ -440,9 +442,10 @@ fn builtin_lazy_if(ctx: *Context, allocator: std.mem.Allocator, node: Node) anye
     return EvalError.WrongExpressionType;
 }
 
-fn make_identifier(
-    allocator: std.mem.Allocator,
-    name: []const u8,
-) !Node {
-    return Node{ .atom = try Token.init_with_content(allocator, name, .identifier) };
+fn make_identifier(allocator: std.mem.Allocator, name: []const u8) !Node {
+    return Node{ .atom = try Token.init_with_content(
+        allocator,
+        name,
+        .identifier,
+    ) };
 }

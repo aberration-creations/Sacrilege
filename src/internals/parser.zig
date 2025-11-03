@@ -16,7 +16,7 @@ pub fn parse(
     ntokparsed: *usize,
     allocator: std.mem.Allocator,
 ) !Node {
-    var current = Node.new_sexpr(allocator);
+    var current = Node.new_sexpr();
 
     var tokn: usize = 0;
     while (true) {
@@ -28,7 +28,7 @@ pub fn parse(
             sac.TokenType.paren_b => {
                 var nparsed: usize = 0;
                 const nested = try parse(input[(tokn + 1)..], level + 1, &nparsed, allocator);
-                try current.sexpr.append(nested);
+                try current.sexpr.append(allocator, nested);
                 tokn += nparsed;
             },
             sac.TokenType.paren_e => {
@@ -36,7 +36,7 @@ pub fn parse(
                 return current;
             },
             else => {
-                try current.sexpr.append(Node{ .atom = try input[tokn].copy() });
+                try current.sexpr.append(allocator, Node{ .atom = try input[tokn].copy(allocator) });
             },
         }
         tokn += 1;

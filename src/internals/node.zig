@@ -22,31 +22,31 @@ pub const Node = union(NodeType) {
     atom: Token,
     sexpr: std.ArrayList(Self),
 
-    pub fn deinit(self: Self) void {
+    pub fn deinit(self: Self, allocator: std.mem.Allocator) void {
         switch (self) {
-            NodeType.atom => |atm| {
-                atm.deinit();
+            NodeType.atom => |*atm| {
+                @constCast(atm).deinit(allocator);
             },
-            NodeType.sexpr => |xpr| {
+            NodeType.sexpr => |*xpr| {
                 for (xpr.items) |item| {
-                    item.deinit();
+                    item.deinit(allocator);
                 }
-                xpr.deinit();
+                @constCast(xpr).deinit(allocator);
             },
         }
     }
 
-    pub fn copy(self: Self) !Self {
+    pub fn copy(self: Self, allocator: std.mem.Allocator) !Self {
         switch (self) {
             NodeType.atom => {
                 return Node{
-                    .atom = try self.atom.copy(),
+                    .atom = try self.atom.copy(allocator),
                 };
             },
             NodeType.sexpr => {
-                var arr = std.ArrayList(Self).init(self.sexpr.allocator);
+                var arr = std.ArrayList(Self).empty;
                 for (self.sexpr.items) |child| {
-                    try arr.append(try child.copy());
+                    try arr.append(allocator, try child.copy(allocator));
                 }
                 return Node{
                     .sexpr = arr,
