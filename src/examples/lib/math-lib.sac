@@ -1,0 +1,14 @@
+
+;; A simple math library
+(defun inc (x)
+    (sum x 1))
+
+;; For require/include behavior test: bump a counter on load
+(defun bump! ()
+    (set module_loaded (sum (get module_loaded) 1)))
+(bump!)
+
+;; Return a value so callers of include can assert it
+(sum 2 3)
+
+

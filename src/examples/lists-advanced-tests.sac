@@ -1,0 +1,36 @@
+
+;; Advanced list tests inspired by Racket semantics
+
+(print "Starting advanced list tests...")
+
+;; null? / empty? / list? / pair?
+(assert (eq (null? (list)) true))
+(assert (eq (empty? (list)) true))
+(assert (eq (list? (list 1 2)) true))
+(assert (eq (pair? (list 1 2)) true))
+(assert (eq (pair? (list)) false))
+
+;; length
+(assert (eq (length (list)) 0))
+(assert (eq (length (list 1 2 3 4)) 4))
+
+;; list-ref (0-based)
+(assert (eq (list-ref (list 10 20 30) 0) 10))
+(assert (eq (list-ref (list 10 20 30) 2) 30))
+
+;; list-tail (0-based)
+(assert (eq (car (list-tail (list 1 2 3 4) 2)) 3))
+(assert (eq (length (list-tail (list 1 2 3 4) 4)) 0))
+
+;; reverse
+(assert (eq (car (reverse (list 1 2 3))) 3))
+(assert (eq (last (reverse (list 1 2 3))) 1))
+
+;; list* approximates; when last is list, prepend
+(assert (eq (list* 1 2 (list 3 4)) (list 1 2 3 4)))
+;; when last is atom, we approximate to (list 1 2 3)
+(assert (eq (list* 1 2 3) (list 1 2 3)))
+
+(print "All advanced list tests completed successfully!")
+
+

@@ -36,6 +36,9 @@ test "example files run without errors" {
     try testRunFile("./examples/subroutine-call.sac");
     try testRunFile("./examples/math-expressions.sac");
     try testRunFile("./examples/lists-tests.sac");
+    try testRunFile("./examples/lists-advanced-tests.sac");
+    try testRunFile("./examples/predicates-tests.sac");
+    try testRunFile("./examples/modules-tests.sac");
 }
 
 test "defun arity errors" {

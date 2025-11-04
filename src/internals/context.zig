@@ -18,6 +18,7 @@ pub const Context = struct {
     lazy_funcs: std.StringHashMap(*const Func),
     ids: std.StringHashMap(Node),
     strings: std.ArrayList(std.ArrayList(u8)),
+    loaded_modules: std.StringHashMap(void),
 
     context_id: u32 = 0,
     is_error: bool = false,
@@ -41,12 +42,14 @@ pub const Context = struct {
             str.deinit(allocator);
         }
         self.strings.deinit(allocator);
+        self.loaded_modules.clearAndFree();
         self.funcs.clearAndFree();
         self.lazy_funcs.clearAndFree();
         self.ids.clearAndFree();
         self.funcs.deinit();
         self.lazy_funcs.deinit();
         self.ids.deinit();
+        self.loaded_modules.deinit();
     }
 
     pub fn init(allocator: std.mem.Allocator) !Self {
@@ -56,6 +59,7 @@ pub const Context = struct {
             .lazy_funcs = std.StringHashMap(*const Func).init(allocator),
             .ids = std.StringHashMap(Node).init(allocator),
             .strings = std.ArrayList(std.ArrayList(u8)).empty,
+            .loaded_modules = std.StringHashMap(void).init(allocator),
             .context_id = context_id_counter,
         };
         errdefer ctx.deinit(allocator);

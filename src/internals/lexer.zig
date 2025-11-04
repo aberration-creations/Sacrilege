@@ -91,6 +91,12 @@ pub const Token = struct {
                         try self.raw.append(allocator, c);
                         return true;
                     },
+                    '-' => {
+                        // start a negative number literal
+                        self.id = TokenType.number;
+                        try self.raw.append(allocator, c);
+                        return true;
+                    },
                     '0'...'9' => {
                         self.id = TokenType.number;
                         try self.raw.append(allocator, c);
@@ -187,6 +193,18 @@ pub const Token = struct {
                         return true;
                     },
                     'A'...'Z' => {
+                        try self.raw.append(allocator, c);
+                        return true;
+                    },
+                    '*' => {
+                        try self.raw.append(allocator, c);
+                        return true;
+                    },
+                    '?' => {
+                        try self.raw.append(allocator, c);
+                        return true;
+                    },
+                    '!' => {
                         try self.raw.append(allocator, c);
                         return true;
                     },

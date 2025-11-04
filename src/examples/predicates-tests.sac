@@ -1,0 +1,61 @@
+
+;; Predicate tests for Sacrilege
+
+(print "Starting predicate tests...")
+
+;; Built-in boolean values and not/and/or
+(assert (eq (not true) false))
+(assert (eq (not false) true))
+(assert (eq (and true true) true))
+(assert (eq (and true false) false))
+(assert (eq (or false false) false))
+(assert (eq (or true false) true))
+
+;; Numeric comparisons
+(assert (eq (lt 1 2) true))
+(assert (eq (lt 2 1) false))
+(assert (eq (gt 5 3) true))
+(assert (eq (gt 3 5) false))
+(assert (eq (eq 10 10) true))
+(assert (eq (eq 10 11) false))
+
+;; List predicate empty?
+(assert (eq (empty? (list)) true))
+(assert (eq (empty? (list 1)) false))
+
+;; User-defined simple predicate
+(defun zero? (n)
+    (eq n 0))
+(assert (eq (zero? 0) true))
+(assert (eq (zero? 1) false))
+
+;; User-defined even? predicate using arithmetic
+(defun mod (n d)
+    (sub n (mult d (div n d))))
+(defun even? (n)
+    (eq (mod n 2) 0))
+(defun odd? (n)
+    (not (even? n)))
+(assert (eq (even? 4) true))
+(assert (eq (even? 5) false))
+(assert (eq (odd? 5) true))
+(assert (eq (odd? 4) false))
+
+;; Predicates inside conditionals
+(defun sign (n)
+    (if (lt n 0)
+        (print "neg")
+        (if (eq n 0) (print "zero") (print "pos"))))
+(sign 0)
+(sign -1)
+(sign 5)
+
+;; Predicates in higher-level combinations
+(defun between? (x lo hi)
+    (and (lt lo x) (lt x hi)))
+(assert (eq (between? 5 1 10) true))
+(assert (eq (between? 1 1 10) false))
+
+(print "All predicate tests completed successfully!")
+
+

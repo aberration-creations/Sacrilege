@@ -1,0 +1,33 @@
+
+;; Module/library tests for Sacrilege
+
+(print "Starting module tests...")
+
+(set module_loaded 0)
+(include "src/examples/lib/math-lib.sac")
+(assert (eq (inc 5) 6))
+(assert (eq (get module_loaded) 1))
+
+;; require after include should execute (since include didn't mark as loaded)
+(require "src/examples/lib/math-lib.sac")
+(assert (eq (get module_loaded) 2))
+
+;; include should re-execute and return last value from file
+(assert (eq (include "src/examples/lib/math-lib.sac") 5))
+(assert (eq (get module_loaded) 3))
+
+;; include again returns value and bumps again
+(assert (eq (include "src/examples/lib/math-lib.sac") 5))
+(assert (eq (get module_loaded) 4))
+
+;; test nested require does not double-load dependency
+(set module_loaded 0)
+(require "src/examples/lib/nested-lib.sac")
+(assert (eq (inc2 5) 7))
+(assert (eq (get module_loaded) 0))
+(require "src/examples/lib/math-lib.sac")
+(assert (eq (get module_loaded) 0))
+
+(print "All module tests completed successfully!")
+
+

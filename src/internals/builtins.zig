@@ -47,9 +47,20 @@ pub fn registerBuiltins(ctx: *Context) !void {
     try ctx.funcs.put("list", &builtin_list);
     try ctx.funcs.put("cons", &builtin_cons);
     try ctx.funcs.put("empty", &builtin_is_empty);
+    try ctx.funcs.put("empty?", &builtin_is_empty);
+    try ctx.funcs.put("null?", &builtin_is_empty);
+    try ctx.funcs.put("list?", &builtin_listp);
+    try ctx.funcs.put("pair?", &builtin_pairp);
+    try ctx.funcs.put("length", &builtin_len);
+    try ctx.funcs.put("list-ref", &builtin_list_ref);
+    try ctx.funcs.put("list-tail", &builtin_list_tail);
+    try ctx.funcs.put("reverse", &builtin_reverse);
+    try ctx.funcs.put("list*", &builtin_list_star);
 
     try ctx.funcs.put("readfile", &builtin_readfile);
     try ctx.funcs.put("evalfile", &builtin_evalfile);
+    try ctx.funcs.put("include", &builtin_include);
+    try ctx.funcs.put("require", &builtin_require);
 
     try ctx.funcs.put("parse", &builtin_parse);
 }
@@ -593,6 +604,107 @@ fn builtin_is_empty(_: *Context, allocator: std.mem.Allocator, node: Node) anyer
     return try builtin_false(allocator);
 }
 
+fn builtin_listp(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
+    if (node.sexpr.items.len != 2) {
+        return EvalError.WrongArgumentCount;
+    }
+    if (node.sexpr.items[1] == NodeType.sexpr) {
+        return try builtin_true(allocator);
+    }
+    return try builtin_false(allocator);
+}
+
+fn builtin_pairp(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
+    if (node.sexpr.items.len != 2) {
+        return EvalError.WrongArgumentCount;
+    }
+    if (node.sexpr.items[1] == NodeType.sexpr and node.sexpr.items[1].sexpr.items.len > 0) {
+        return try builtin_true(allocator);
+    }
+    return try builtin_false(allocator);
+}
+
+fn builtin_list_ref(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
+    if (node.sexpr.items.len != 3) {
+        return EvalError.WrongArgumentCount;
+    }
+    const index: usize = @intCast(try node_to_i128(ctx, node.sexpr.items[2]));
+    if (node.sexpr.items[1] != NodeType.sexpr) {
+        return EvalError.WrongArgumentType;
+    }
+    if (index >= node.sexpr.items[1].sexpr.items.len) {
+        return EvalError.WrongArgumentCount;
+    }
+    return try node.sexpr.items[1].sexpr.items[index].copy(allocator);
+}
+
+fn builtin_list_tail(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
+    if (node.sexpr.items.len != 3) {
+        return EvalError.WrongArgumentCount;
+    }
+    const n: usize = @intCast(try node_to_i128(ctx, node.sexpr.items[2]));
+    if (node.sexpr.items[1] != NodeType.sexpr) {
+        return EvalError.WrongArgumentType;
+    }
+    if (n > node.sexpr.items[1].sexpr.items.len) {
+        return EvalError.WrongArgumentCount;
+    }
+    var out = Node.new_sexpr();
+    var i: usize = n;
+    while (i < node.sexpr.items[1].sexpr.items.len) : (i += 1) {
+        try out.sexpr.append(allocator, try node.sexpr.items[1].sexpr.items[i].copy(allocator));
+    }
+    return out;
+}
+
+fn builtin_reverse(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
+    if (node.sexpr.items.len != 2) {
+        return EvalError.WrongArgumentCount;
+    }
+    if (node.sexpr.items[1] != NodeType.sexpr) {
+        return EvalError.WrongArgumentType;
+    }
+    var out = Node.new_sexpr();
+    var i: isize = @intCast(node.sexpr.items[1].sexpr.items.len);
+    i -= 1;
+    while (i >= 0) : (i -= 1) {
+        const idx: usize = @intCast(i);
+        try out.sexpr.append(allocator, try node.sexpr.items[1].sexpr.items[idx].copy(allocator));
+    }
+    return out;
+}
+
+fn builtin_list_star(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
+    if (node.sexpr.items.len < 2) {
+        return EvalError.WrongArgumentCount;
+    }
+    const argc = node.sexpr.items.len - 1;
+    const last = node.sexpr.items[argc];
+    var out = Node.new_sexpr();
+    if (last == NodeType.sexpr) {
+        // start with copied last list
+        for (last.sexpr.items) |it| {
+            try out.sexpr.append(allocator, try it.copy(allocator));
+        }
+    } else {
+        // approximate improper pair by making it a list ending with last
+        try out.sexpr.append(allocator, try last.copy(allocator));
+    }
+    // Prepend previous args in reverse order
+    var i: isize = @intCast(argc - 1);
+    while (i >= 1) : (i -= 1) {
+        const idx: usize = @intCast(i);
+        var new_out = Node.new_sexpr();
+        try new_out.sexpr.append(allocator, try node.sexpr.items[idx].copy(allocator));
+        for (out.sexpr.items) |it| {
+            try new_out.sexpr.append(allocator, try it.copy(allocator));
+        }
+        out.deinit(allocator);
+        out = new_out;
+    }
+    return out;
+}
+
 fn builtin_and(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
     if (node.sexpr.items.len == 1) {
         return EvalError.WrongArgumentCount;
@@ -633,16 +745,17 @@ fn builtin_not(_: *Context, allocator: std.mem.Allocator, node: Node) anyerror!N
     if (node.sexpr.items.len != 2) {
         return EvalError.WrongArgumentCount;
     }
-    if (node != NodeType.atom) {
+    const arg = node.sexpr.items[1];
+    if (arg != NodeType.atom) {
         return EvalError.WrongArgumentType;
     }
-    if (node.atom.id != TokenType.identifier) {
+    if (arg.atom.id != TokenType.identifier) {
         return EvalError.WrongArgumentType;
     }
-    if (std.mem.eql(u8, node.atom.raw.items, "true")) {
+    if (std.mem.eql(u8, arg.atom.raw.items, "true")) {
         return builtin_false(allocator);
     }
-    if (std.mem.eql(u8, node.atom.raw.items, "false")) {
+    if (std.mem.eql(u8, arg.atom.raw.items, "false")) {
         return builtin_true(allocator);
     }
     return EvalError.WrongArgumentType;
@@ -718,12 +831,65 @@ fn builtin_evalfile(ctx: *Context, allocator: std.mem.Allocator, node: Node) any
     defer file.close();
 
     const raw = try file.readToEndAlloc(allocator, 1024 * 1024);
+    defer allocator.free(raw);
     var tokenizer = Tokenizer.init();
     defer tokenizer.deinit(allocator);
     try tokenizer.tokenize(allocator, raw);
     var ntokparsed: usize = 0;
-    const nparsed = try parse(tokenizer.tokens.items, 0, &ntokparsed, allocator);
-    return try eval(ctx, allocator, nparsed);
+    var nparsed = try parse(tokenizer.tokens.items, 0, &ntokparsed, allocator);
+    defer nparsed.deinit(allocator);
+
+    // Evaluate file forms sequentially; return last value if any, else empty
+    if (nparsed != NodeType.sexpr) {
+        return try eval(ctx, allocator, nparsed);
+    }
+    var have: bool = false;
+    var last = builtin_empty(allocator);
+    for (nparsed.sexpr.items) |form| {
+        if (have) {
+            last.deinit(allocator);
+        } else {
+            have = true;
+            last.deinit(allocator);
+        }
+        last = try eval(ctx, allocator, form);
+    }
+    if (!have) {
+        return last;
+    }
+    return last;
+}
+
+fn builtin_include(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
+    // Same semantics as evalfile
+    return try builtin_evalfile(ctx, allocator, node);
+}
+
+fn builtin_require(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
+    if (node.sexpr.items.len != 2) {
+        return EvalError.WrongArgumentCount;
+    }
+    if (node.sexpr.items[1] != NodeType.atom) {
+        return EvalError.WrongArgumentType;
+    }
+    if (node.sexpr.items[1].atom.id != TokenType.string) {
+        return EvalError.WrongArgumentType;
+    }
+    const filename = node.sexpr.items[1].atom.raw.items;
+    if (ctx.loaded_modules.get(filename)) |_| {
+        return builtin_empty(allocator);
+    }
+
+    // Evaluate the file, discard the result
+    var res = try builtin_evalfile(ctx, allocator, node);
+    res.deinit(allocator);
+
+    // Record as loaded, store a retained copy of the filename
+    var fname_copy = try node.sexpr.items[1].atom.raw.clone(allocator);
+    errdefer fname_copy.deinit(allocator);
+    try ctx.strings.append(allocator, fname_copy);
+    try ctx.loaded_modules.put(fname_copy.items, {});
+    return builtin_empty(allocator);
 }
 
 fn builtin_lazy_foreach(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {

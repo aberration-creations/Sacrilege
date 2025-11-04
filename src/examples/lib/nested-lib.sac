@@ -1,0 +1,8 @@
+
+;; A library that depends on math-lib
+(require "src/examples/lib/math-lib.sac")
+
+(defun inc2 (x)
+    (inc (inc x)))
+
+

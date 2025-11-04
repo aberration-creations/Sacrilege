@@ -27,9 +27,9 @@
 (assert (eq (len (car (make-nested))) 2))
 (assert (eq (len (last (make-nested))) 2))
 
-;; empty predicate
-(assert (eq (empty (list)) true))
-(assert (eq (empty (list 1)) false))
+;; empty? predicate
+(assert (eq (empty? (list)) true))
+(assert (eq (empty? (list 1)) false))
 
 ;; cdr drops first
 (assert (eq (car (cdr (list 9 8 7))) 8))
