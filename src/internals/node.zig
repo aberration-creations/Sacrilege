@@ -72,6 +72,9 @@ pub const Node = union(NodeType) {
                 return std.mem.eql(u8, self.atom.raw.items, other.atom.raw.items);
             },
             NodeType.sexpr => {
+                if (other != NodeType.sexpr) {
+                    return false;
+                }
                 if (self.sexpr.items.len != other.sexpr.items.len) {
                     return false;
                 }

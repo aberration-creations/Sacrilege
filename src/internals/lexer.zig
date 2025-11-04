@@ -190,6 +190,14 @@ pub const Token = struct {
                         try self.raw.append(allocator, c);
                         return true;
                     },
+                    '-' => {
+                        try self.raw.append(allocator, c);
+                        return true;
+                    },
+                    '_' => {
+                        try self.raw.append(allocator, c);
+                        return true;
+                    },
                     '0'...'9' => {
                         try self.raw.append(allocator, c);
                         return true;
@@ -243,16 +251,35 @@ pub const Tokenizer = struct {
         allocator: std.mem.Allocator,
         input: []const u8,
     ) !void {
+        var i: usize = 0;
         var charpos: u32 = 0;
         var linepos: u32 = 1;
         var current: Token = try Token.init(1, 1);
-        for (input) |elem| {
+        while (i < input.len) {
+            const elem = input[i];
             if (elem == '\n') {
                 linepos += 1;
                 charpos = 0;
             } else {
                 charpos += 1;
             }
+
+            // Skip comments that start with ';' until end of line.
+            if (elem == ';') {
+                if (current.id != TokenType.unassigned) {
+                    try self.tokens.append(allocator, current);
+                } else {
+                    current.deinit(allocator);
+                }
+                current = try Token.init(linepos, charpos);
+                // advance until newline or end (leave i at newline to let loop handle it)
+                i += 1;
+                while (i < input.len and input[i] != '\n') {
+                    i += 1;
+                }
+                continue;
+            }
+
             const previd = current.id;
             if (!try current.apply(allocator, elem)) {
                 if (current.id != TokenType.unassigned) {
@@ -268,6 +295,7 @@ pub const Tokenizer = struct {
                     current.pos.char = charpos;
                 }
             }
+            i += 1;
         }
         if (current.id != TokenType.unassigned) {
             try self.tokens.append(allocator, current);

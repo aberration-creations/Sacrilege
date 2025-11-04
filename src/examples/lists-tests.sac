@@ -1,0 +1,40 @@
+
+;; Lists tests for Sacrilege
+
+(print "Starting lists tests...")
+
+;; Construct lists
+(assert (eq (len (list)) 0))
+(assert (eq (len (list 1 2 3)) 3))
+(assert (eq (car (list 10 20 30)) 10))
+(assert (eq (elem 2 (list 10 20 30)) 20))
+(assert (eq (last (list 10 20 30)) 30))
+
+;; cons
+(assert (eq (car (cons 1 (list 2 3))) 1))
+(assert (eq (len (cons 1 (list 2 3))) 3))
+(assert (eq (elem 2 (cons 1 (list 2 3))) 2))
+
+;; append (variadic)
+(assert (eq (len (append (list 1 2) 3 4)) 4))
+(assert (eq (car (append (list 1 2) 3 4)) 1))
+(assert (eq (last (append (list 1 2) 3 4)) 4))
+
+;; nested lists
+(defun make-nested ()
+    (list (list 1 2) (list 3 (list 4 5))))
+(assert (eq (len (make-nested)) 2))
+(assert (eq (len (car (make-nested))) 2))
+(assert (eq (len (last (make-nested))) 2))
+
+;; empty predicate
+(assert (eq (empty (list)) true))
+(assert (eq (empty (list 1)) false))
+
+;; cdr drops first
+(assert (eq (car (cdr (list 9 8 7))) 8))
+(assert (eq (len (cdr (list 9 8 7))) 2))
+
+(print "All lists tests completed successfully!")
+
+

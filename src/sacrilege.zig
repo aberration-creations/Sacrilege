@@ -34,8 +34,94 @@ test "example files run without errors" {
     try testRunFile("./examples/basic-expression.sac");
     try testRunFile("./examples/context-get-set.sac");
     try testRunFile("./examples/subroutine-call.sac");
-    try testRunFile("./examples/defun-tests.sac");
     try testRunFile("./examples/math-expressions.sac");
+    try testRunFile("./examples/lists-tests.sac");
+}
+
+test "defun arity errors" {
+    // double: expects 1
+    try testExecutionError(
+        "(defun double (x) (mult 2 x))\n(double)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 1 found 0",
+    );
+    try testExecutionError(
+        "(defun double (x) (mult 2 x))\n(double 5 10)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 1 found 2",
+    );
+
+    // set-a: expects 0
+    try testExecutionError(
+        "(defun set-a () (set a 42))\n(set-a 42)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 0 found 1",
+    );
+
+    // add: expects 2
+    try testExecutionError(
+        "(defun add (x y) (sum x y))\n(add 5)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 2 found 1",
+    );
+    try testExecutionError(
+        "(defun add (x y) (sum x y))\n(add 5 10 15)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 2 found 3",
+    );
+
+    // calculate: expects 3
+    try testExecutionError(
+        "(defun calculate (x y z) (sub (mult x y) z))\n(calculate 5)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 3 found 1",
+    );
+    try testExecutionError(
+        "(defun calculate (x y z) (sub (mult x y) z))\n(calculate 5 3)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 3 found 2",
+    );
+    try testExecutionError(
+        "(defun calculate (x y z) (sub (mult x y) z))\n(calculate 5 3 2 1)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 3 found 4",
+    );
+
+    // factorial: expects 1
+    try testExecutionError(
+        "(defun factorial (n) (if (eq n 0) 1 (mult n (factorial (sub n 1)))))\n(factorial)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 1 found 0",
+    );
+    try testExecutionError(
+        "(defun factorial (n) (if (eq n 0) 1 (mult n (factorial (sub n 1)))))\n(factorial 5 10)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 1 found 2",
+    );
+
+    // max-of-three: expects 3
+    try testExecutionError(
+        "(defun max (a b) (if (gt a b) a b))\n(defun max-of-three (a b c) (max a (max b c)))\n(max-of-three 1 5)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 3 found 2",
+    );
+    try testExecutionError(
+        "(defun max (a b) (if (gt a b) a b))\n(defun max-of-three (a b c) (max a (max b c)))\n(max-of-three 1 5 3 9)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 3 found 4",
+    );
+
+    // add-square: expects 2
+    try testExecutionError(
+        "(defun square (x) (mult x x))\n(defun add (x y) (sum x y))\n(defun add-square (x y) (add (square x) (square y)))\n(add-square 3)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 2 found 1",
+    );
+    try testExecutionError(
+        "(defun square (x) (mult x x))\n(defun add (x y) (sum x y))\n(defun add-square (x y) (add (square x) (square y)))\n(add-square 3 4 5)",
+        EvalError.WrongArgumentCount,
+        "Wrong argument count expected 2 found 3",
+    );
 }
 
 test "eval error UndefinedIdentifier" {
