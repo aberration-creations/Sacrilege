@@ -119,7 +119,232 @@ pub fn eval(
                         // Evaluate it.
                         return try idf(ctx, allocator, evald);
                     }
+                    // Fast path: if operator identifier is an alias bound to another
+                    // identifier that names a registered function, swap and call it.
+                    if (ctx.ids.get(idn)) |alias_val| {
+                        if (alias_val == NodeType.atom and alias_val.atom.id == TokenType.identifier) {
+                            const alt = alias_val.atom.raw.items;
+                            if (ctx.funcs.get(alt)) |aidf| {
+                                evald.sexpr.items[0].deinit(allocator);
+                                evald.sexpr.items[0] = try alias_val.copy(allocator);
+                                return try aidf(ctx, allocator, evald);
+                            }
+                        }
+                    }
+                    // Try resolving operator identifier via context ids (function values)
+                    if (ctx.ids.get(idn)) |alias_val| {
+                        if (alias_val == NodeType.atom and alias_val.atom.id == TokenType.identifier) {
+                            const alt = alias_val.atom.raw.items;
+                            if (ctx.ids.get(alt)) |stored| {
+                                // Invoke as function value using stored definition
+                                if (stored != NodeType.sexpr or stored.sexpr.items.len == 0) {
+                                    return EvalError.WrongExpressionType;
+                                }
+                                const params_node2 = stored.sexpr.items[0];
+                                if (params_node2 != NodeType.sexpr) {
+                                    return EvalError.WrongExpressionType;
+                                }
+                                const param_count2 = params_node2.sexpr.items.len;
+                                const provided_count2 = evald.sexpr.items.len - 1;
+                                if (provided_count2 != param_count2) {
+                                    return ctx.raise_error(
+                                        EvalError.WrongArgumentCount,
+                                        idn_atom,
+                                        "Wrong argument count expected {} found {}",
+                                        .{ param_count2, provided_count2 },
+                                    );
+                                }
+                                const Binding2 = struct { key: []const u8, prev: ?Node = null };
+                                var bindings2 = std.ArrayList(Binding2).empty;
+                                defer {
+                                    var j: usize = bindings2.items.len;
+                                    while (j > 0) {
+                                        j -= 1;
+                                        const b = &bindings2.items[j];
+                                        if (b.prev) |pv| {
+                                            if (ctx.ids.get(b.key)) |*cur| {
+                                                cur.deinit(allocator);
+                                                _ = ctx.ids.put(b.key, pv) catch {};
+                                            } else {
+                                                _ = ctx.ids.put(b.key, pv) catch {};
+                                            }
+                                        } else {
+                                            if (ctx.ids.get(b.key)) |*cur| {
+                                                cur.deinit(allocator);
+                                                _ = ctx.ids.remove(b.key);
+                                            }
+                                        }
+                                    }
+                                    bindings2.deinit(allocator);
+                                }
+                                for (params_node2.sexpr.items, evald.sexpr.items[1..]) |p, a| {
+                                    var b = Binding2{ .key = p.atom.raw.items };
+                                    const a_copy = try a.copy(allocator);
+                                    if (ctx.ids.get(b.key)) |*ex| {
+                                        b.prev = try ex.*.copy(allocator);
+                                        ex.deinit(allocator);
+                                        try ctx.ids.put(b.key, a_copy);
+                                    } else {
+                                        try ctx.ids.put(b.key, a_copy);
+                                    }
+                                    try bindings2.append(allocator, b);
+                                }
+                                var res2 = Node{ .sexpr = std.ArrayList(Node).empty };
+                                var have2 = false;
+                                for (stored.sexpr.items[1..]) |body2| {
+                                    if (have2) {
+                                        res2.deinit(allocator);
+                                    } else {
+                                        have2 = true;
+                                    }
+                                    res2 = try eval(ctx, allocator, body2);
+                                }
+                                return res2;
+                            }
+                        } else if (alias_val == NodeType.sexpr) {
+                            // Treat as function value
+                            const stored = alias_val;
+                            const params_node = stored.sexpr.items[0];
+                            const param_count = params_node.sexpr.items.len;
+                            const provided_count = evald.sexpr.items.len - 1;
+                            if (provided_count != param_count) {
+                                return ctx.raise_error(
+                                    EvalError.WrongArgumentCount,
+                                    idn_atom,
+                                    "Wrong argument count expected {} found {}",
+                                    .{ param_count, provided_count },
+                                );
+                            }
+                            const Binding = struct { key: []const u8, prev: ?Node = null };
+                            var bindings = std.ArrayList(Binding).empty;
+                            defer {
+                                var idx: usize = bindings.items.len;
+                                while (idx > 0) {
+                                    idx -= 1;
+                                    const binding = &bindings.items[idx];
+                                    if (binding.prev) |prev_node| {
+                                        if (ctx.ids.get(binding.key)) |*current| {
+                                            current.deinit(allocator);
+                                            _ = ctx.ids.put(binding.key, prev_node) catch {};
+                                        } else {
+                                            _ = ctx.ids.put(binding.key, prev_node) catch {};
+                                        }
+                                    } else {
+                                        if (ctx.ids.get(binding.key)) |*current| {
+                                            current.deinit(allocator);
+                                            _ = ctx.ids.remove(binding.key);
+                                        }
+                                    }
+                                }
+                                bindings.deinit(allocator);
+                            }
+                            for (params_node.sexpr.items, evald.sexpr.items[1..]) |param_value, arg_val| {
+                                var binding = Binding{ .key = param_value.atom.raw.items };
+                                const arg_copy = try arg_val.copy(allocator);
+                                if (ctx.ids.get(binding.key)) |*existing| {
+                                    binding.prev = try existing.*.copy(allocator);
+                                    existing.deinit(allocator);
+                                    try ctx.ids.put(binding.key, arg_copy);
+                                } else {
+                                    try ctx.ids.put(binding.key, arg_copy);
+                                }
+                                try bindings.append(allocator, binding);
+                            }
+                            var result = Node{ .sexpr = std.ArrayList(Node).empty };
+                            var have_result = false;
+                            for (stored.sexpr.items[1..]) |body| {
+                                if (have_result) {
+                                    result.deinit(allocator);
+                                } else {
+                                    have_result = true;
+                                    result.deinit(allocator);
+                                }
+                                result = try eval(ctx, allocator, body);
+                            }
+                            if (!have_result) return result;
+                            return result;
+                        }
+                    }
                     return ctx.raise_function_does_not_exists(idn_atom);
+                } else if (evald.sexpr.items[0] == NodeType.sexpr) {
+                    // Operator evaluated to a function value (lambda/defun capture).
+                    const stored = evald.sexpr.items[0];
+                    if (stored != NodeType.sexpr or stored.sexpr.items.len == 0) {
+                        return EvalError.WrongExpressionType;
+                    }
+                    const params_node = stored.sexpr.items[0];
+                    if (params_node != NodeType.sexpr) {
+                        return EvalError.WrongExpressionType;
+                    }
+
+                    const param_count = params_node.sexpr.items.len;
+                    const provided_count = evald.sexpr.items.len - 1;
+                    if (provided_count != param_count) {
+                        return ctx.raise_error(
+                            EvalError.WrongArgumentCount,
+                            node.sexpr.items[0].findFirstToken(),
+                            "Wrong argument count expected {} found {}",
+                            .{ param_count, provided_count },
+                        );
+                    }
+
+                    const Binding = struct {
+                        key: []const u8,
+                        prev: ?Node = null,
+                    };
+
+                    var bindings = std.ArrayList(Binding).empty;
+                    defer {
+                        var idx: usize = bindings.items.len;
+                        while (idx > 0) {
+                            idx -= 1;
+                            const binding = &bindings.items[idx];
+                            if (binding.prev) |prev_node| {
+                                if (ctx.ids.get(binding.key)) |*current| {
+                                    current.deinit(allocator);
+                                    _ = ctx.ids.put(binding.key, prev_node) catch {};
+                                } else {
+                                    _ = ctx.ids.put(binding.key, prev_node) catch {};
+                                }
+                            } else {
+                                if (ctx.ids.get(binding.key)) |*current| {
+                                    current.deinit(allocator);
+                                    _ = ctx.ids.remove(binding.key);
+                                }
+                            }
+                        }
+                        bindings.deinit(allocator);
+                    }
+
+                    // Bind evaluated args directly from evald
+                    for (params_node.sexpr.items, evald.sexpr.items[1..]) |param_value, arg_val| {
+                        var binding = Binding{ .key = param_value.atom.raw.items };
+                        const arg_copy = try arg_val.copy(allocator);
+                        if (ctx.ids.get(binding.key)) |*existing| {
+                            binding.prev = try existing.*.copy(allocator);
+                            existing.deinit(allocator);
+                            try ctx.ids.put(binding.key, arg_copy);
+                        } else {
+                            try ctx.ids.put(binding.key, arg_copy);
+                        }
+                        try bindings.append(allocator, binding);
+                    }
+
+                    var result = Node{ .sexpr = std.ArrayList(Node).empty };
+                    var have_result = false;
+                    for (stored.sexpr.items[1..]) |body| {
+                        if (have_result) {
+                            result.deinit(allocator);
+                        } else {
+                            have_result = true;
+                            result.deinit(allocator);
+                        }
+                        result = try eval(ctx, allocator, body);
+                    }
+                    if (!have_result) {
+                        return result;
+                    }
+                    return result;
                 }
             }
             evald_active = false;

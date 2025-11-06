@@ -21,6 +21,7 @@ pub const Context = struct {
     loaded_modules: std.StringHashMap(void),
 
     context_id: u32 = 0,
+    lambda_counter: u64 = 0,
     is_error: bool = false,
     error_type: EvalError = undefined,
     error_line: u32 = undefined,
@@ -61,10 +62,16 @@ pub const Context = struct {
             .strings = std.ArrayList(std.ArrayList(u8)).empty,
             .loaded_modules = std.StringHashMap(void).init(allocator),
             .context_id = context_id_counter,
+            .lambda_counter = 0,
         };
         errdefer ctx.deinit(allocator);
         try sac.registerBuiltins(&ctx);
         return ctx;
+    }
+
+    pub fn next_lambda_id(self: *Self) u64 {
+        self.lambda_counter += 1;
+        return self.lambda_counter;
     }
 
     pub fn register_func(self: *Self, name: []const u8, func: *const Func) !void {

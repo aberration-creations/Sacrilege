@@ -1,0 +1,44 @@
+
+;; Lambda tests
+
+;;(print "Starting lambda tests...")
+
+;; basic lambda application
+(assert (eq ((lambda (x) (sum x 1)) 5) 6))
+;;(print "ok1")
+
+;; multi-arg lambda
+(assert (eq ((lambda (x y) (sum x y)) 3 4) 7))
+;;(print "ok2")
+
+;; closures capture by value
+(set a 10)
+(set inc-a (lambda (x) (sum a x)))
+(assert (eq (inc-a 5) 15))
+;;(print "ok3")
+(set a 100)
+(assert (eq (inc-a 5) 15))
+;;(print "ok4")
+
+;; higher-order usage
+(defun apply (f x) (f x))
+(assert (eq (apply (lambda (z) (sum z 2)) 5) 7))
+;;(print "ok5")
+
+;; returning lambdas
+(defun make-adder (n)
+    (lambda (x) (sum x n)))
+(assert (eq ((make-adder 3) 4) 7))
+;;(print "ok6")
+
+;; lambda as argument and return composition
+;; alternative composition using closure, avoiding nested operator resolution
+(set inc (lambda (x) (sum x 1)))
+(set double (lambda (x) (mult 2 x)))
+(set inc-then-double (lambda (x) (double (inc x))))
+(assert (eq (inc-then-double 5) 12))
+;;(print "ok7")
+
+;;(print "All lambda tests completed successfully!")
+
+

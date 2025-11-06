@@ -16,6 +16,7 @@ pub fn registerBuiltins(ctx: *Context) !void {
     try ctx.lazy_funcs.put("if", &builtin_lazy_if);
     try ctx.lazy_funcs.put("foreach", &builtin_lazy_foreach);
     try ctx.lazy_funcs.put("defun", &builtin_defun);
+    try ctx.lazy_funcs.put("lambda", &builtin_lambda);
 
     try ctx.funcs.put("assert", &builtin_assert);
 
@@ -284,6 +285,102 @@ fn builtin_defun(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerr
     return builtin_empty(allocator);
 }
 
+fn builtin_lambda(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
+    // (lambda (params...) body...)
+    if (node.sexpr.items.len < 3) {
+        return EvalError.WrongArgumentCount;
+    }
+    try ctx.ensure_argument_nodetype(node, 0, .sexpr);
+
+    var fn_def = Node.new_sexpr();
+    errdefer fn_def.deinit(allocator);
+
+    const params = node.sexpr.items[1];
+    for (params.sexpr.items) |param| {
+        if (param != NodeType.atom or param.atom.id != TokenType.identifier) {
+            return EvalError.WrongArgumentType;
+        }
+    }
+    try fn_def.sexpr.append(allocator, try params.copy(allocator));
+
+    // Build param name set
+    var param_names = std.StringHashMap(void).init(allocator);
+    defer param_names.deinit();
+    for (params.sexpr.items) |p| {
+        try param_names.put(p.atom.raw.items, {});
+    }
+
+    // Capture free identifiers by replacing them with current values
+    const transform = struct {
+        fn walk(tctx: *Context, alloc: std.mem.Allocator, n: Node, params_set: *std.StringHashMap(void)) anyerror!Node {
+            switch (n) {
+                NodeType.atom => {
+                    if (n.atom.id == TokenType.identifier) {
+                        if (params_set.get(n.atom.raw.items) == null) {
+                            const name = n.atom.raw.items;
+                            if (tctx.ids.get(name)) |val| {
+                                if (tctx.funcs.get(name)) |_| {
+                                    return try n.copy(alloc);
+                                }
+                                return try val.copy(alloc);
+                            }
+                        }
+                    }
+                    return n.copy(alloc);
+                },
+                NodeType.sexpr => {
+                    var out = Node.new_sexpr();
+                    if (n.sexpr.items.len > 0) {
+                        const head = n.sexpr.items[0];
+                        var head_is_ident = false;
+                        var head_name: []const u8 = &[_]u8{};
+                        if (head == NodeType.atom and head.atom.id == TokenType.identifier) {
+                            head_is_ident = true;
+                            head_name = head.atom.raw.items;
+                            try out.sexpr.append(alloc, try head.copy(alloc));
+                        } else {
+                            try out.sexpr.append(alloc, try walk(tctx, alloc, head, params_set));
+                        }
+                        var idx: usize = 1;
+                        while (idx < n.sexpr.items.len) : (idx += 1) {
+                            const child = n.sexpr.items[idx];
+                            if (head_is_ident and (std.mem.eql(u8, head_name, "set") or std.mem.eql(u8, head_name, "get")) and idx == 1) {
+                                try out.sexpr.append(alloc, try child.copy(alloc));
+                            } else {
+                                try out.sexpr.append(alloc, try walk(tctx, alloc, child, params_set));
+                            }
+                        }
+                    }
+                    return out;
+                },
+            }
+            unreachable;
+        }
+    };
+
+    for (node.sexpr.items[2..]) |expr| {
+        const transformed = try transform.walk(ctx, allocator, expr, &param_names);
+        try fn_def.sexpr.append(allocator, transformed);
+    }
+
+    // Register anonymous function with a unique name and return its identifier
+    var buf: [64]u8 = undefined;
+    const unique = try std.fmt.bufPrint(&buf, "__lambda_{}_{}", .{ ctx.context_id, ctx.next_lambda_id() });
+    var name_arr = std.ArrayList(u8).empty;
+    try name_arr.appendSlice(allocator, unique);
+    try ctx.strings.append(allocator, name_arr);
+
+    if (ctx.ids.get(name_arr.items)) |*existing| {
+        existing.deinit(allocator);
+    }
+    try ctx.ids.put(name_arr.items, fn_def);
+    if (ctx.funcs.get(name_arr.items)) |_| {
+        _ = ctx.funcs.remove(name_arr.items);
+    }
+    try ctx.funcs.put(name_arr.items, &builtin_user_function);
+    return try make_identifier(allocator, name_arr.items);
+}
+
 fn builtin_user_function(ctx: *Context, allocator: std.mem.Allocator, node: Node) anyerror!Node {
     if (node.sexpr.items.len == 0) {
         return EvalError.WrongArgumentCount;
@@ -324,31 +421,19 @@ fn builtin_user_function(ctx: *Context, allocator: std.mem.Allocator, node: Node
         var idx: usize = bindings.items.len;
         while (idx > 0) {
             idx -= 1;
-            var binding = &bindings.items[idx];
+            const binding = &bindings.items[idx];
             if (binding.prev) |prev_node| {
                 if (ctx.ids.get(binding.key)) |*current| {
                     current.deinit(allocator);
+                    _ = ctx.ids.put(binding.key, prev_node) catch {};
+                } else {
+                    _ = ctx.ids.put(binding.key, prev_node) catch {};
                 }
-                // Deep copy the node before putting it back to avoid double-free
-                if (prev_node.copy(allocator)) |prev_node_copy| {
-                    _ = ctx.ids.put(binding.key, prev_node_copy) catch {
-                        prev_node_copy.deinit(allocator);
-                    };
-                } else |_| {
-                    // If copy fails, we can't restore, but we should still clean up
-                }
-                binding.prev.?.deinit(allocator);
-                binding.prev = null;
             } else {
                 if (ctx.ids.get(binding.key)) |*current| {
                     current.deinit(allocator);
                     _ = ctx.ids.remove(binding.key);
                 }
-            }
-        }
-        for (bindings.items) |binding| {
-            if (binding.prev) |prev_node| {
-                prev_node.deinit(allocator);
             }
         }
         bindings.deinit(allocator);
@@ -358,8 +443,8 @@ fn builtin_user_function(ctx: *Context, allocator: std.mem.Allocator, node: Node
         if (param_value != NodeType.atom or param_value.atom.id != TokenType.identifier) {
             return EvalError.WrongArgumentType;
         }
-
-        const evaluated_arg = try eval(ctx, allocator, arg_node);
+        // Arguments were already evaluated by the caller; bind copies directly.
+        const evaluated_arg = try arg_node.copy(allocator);
 
         var binding = Binding{
             .key = param_value.atom.raw.items,
@@ -370,7 +455,6 @@ fn builtin_user_function(ctx: *Context, allocator: std.mem.Allocator, node: Node
             existing.deinit(allocator);
             try ctx.ids.put(binding.key, evaluated_arg);
         } else {
-            errdefer evaluated_arg.deinit(allocator);
             try ctx.ids.put(binding.key, evaluated_arg);
         }
 
@@ -408,7 +492,8 @@ fn builtin_user_function(ctx: *Context, allocator: std.mem.Allocator, node: Node
 
         if (!is_tail_self_call) {
             // Not a tail self-call: evaluate and return the result.
-            return try eval(ctx, allocator, last_expr);
+            const outv = try eval(ctx, allocator, last_expr);
+            return outv;
         }
 
         // Tail self-call detected. Rebind arguments and loop.

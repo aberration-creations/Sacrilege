@@ -39,6 +39,7 @@ test "example files run without errors" {
     try testRunFile("./examples/lists-advanced-tests.sac");
     try testRunFile("./examples/predicates-tests.sac");
     try testRunFile("./examples/modules-tests.sac");
+    try testRunFile("./examples/lambdas-tests.sac");
 }
 
 test "defun arity errors" {

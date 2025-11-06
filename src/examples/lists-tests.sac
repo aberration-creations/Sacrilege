@@ -1,7 +1,7 @@
 
 ;; Lists tests for Sacrilege
 
-(print "Starting lists tests...")
+;;(print "Starting lists tests...")
 
 ;; Construct lists
 (assert (eq (len (list)) 0))
@@ -35,6 +35,6 @@
 (assert (eq (car (cdr (list 9 8 7))) 8))
 (assert (eq (len (cdr (list 9 8 7))) 2))
 
-(print "All lists tests completed successfully!")
+;;(print "All lists tests completed successfully!")
 
 
