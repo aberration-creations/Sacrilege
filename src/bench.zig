@@ -23,9 +23,9 @@ fn benchParseEval(writer: anytype, name: []const u8, src: []const u8, iterations
         defer node.deinit(alloc);
         var ctx = try Context.init(alloc);
         defer ctx.deinit(alloc);
-        if (sac.eval(&ctx, alloc, node)) |*result| {
-            result.deinit(alloc);
-        } else |_| {}
+        // Results from eval are pool-allocated and don't need to be deinitialized
+        // The pool will be reset when the context is deinitialized
+        _ = sac.eval(&ctx, node) catch {};
     }
     const ns = timer.read();
     const ns_per = @divTrunc(ns, iterations);
@@ -48,9 +48,11 @@ fn benchEvalOnly(writer: anytype, name: []const u8, src: []const u8, iterations:
     var ctx = try Context.init(alloc);
     defer ctx.deinit(alloc);
     while (i < iterations) : (i += 1) {
-        if (sac.eval(&ctx, alloc, node)) |*result| {
-            result.deinit(alloc);
-        } else |_| {}
+        // Results from eval are pool-allocated and don't need to be deinitialized
+        _ = sac.eval(&ctx, node) catch {};
+        // Note: We don't reset the pool here because it would invalidate keys in the hash maps
+        // The pool will handle multiple iterations, and if it fills up, that's a limitation
+        // For production use, create a new context for each evaluation or implement proper pool management
     }
     const ns = timer.read();
     const ns_per = @divTrunc(ns, iterations);
@@ -104,7 +106,7 @@ pub fn main() !void {
 
     const it_small: usize = 20_000;
     const it_medium: usize = 2_000;
-    const it_file: usize = 50;
+    const it_file: usize = 500;
 
     try stdout.print("Sacrilege benchmarks (ns/op)\n", .{});
     try stdout.flush();

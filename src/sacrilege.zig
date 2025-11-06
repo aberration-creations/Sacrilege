@@ -179,8 +179,8 @@ fn testGetContextAfterRuningRaw(raw: []const u8) !sac.Context {
     var ctx = try sac.Context.init(allocator);
     errdefer ctx.deinit(allocator);
 
-    if (sac.eval(&ctx, allocator, node)) |result| {
-        result.deinit(allocator);
+    if (sac.eval(&ctx, node)) |result| {
+        result.deinit(ctx.pool_allocator);
     } else |err| {
         if (!ctx.is_error) {
             return err; // not an eval error
@@ -205,8 +205,8 @@ fn testRunImpl(path: []const u8, raw: []const u8) !void {
     var ctx = try sac.Context.init(allocator);
     defer ctx.deinit(allocator);
 
-    if (sac.eval(&ctx, allocator, node)) |*result| {
-        result.deinit(allocator);
+    if (sac.eval(&ctx, node)) |*result| {
+        result.deinit(ctx.pool_allocator);
     } else |err| {
         if (ctx.is_error) {
             ctx.debugPrintError(path);

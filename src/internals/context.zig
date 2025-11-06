@@ -7,9 +7,13 @@ const Token = sac.Token;
 const TokenType = sac.TokenType;
 const NodeType = sac.NodeType;
 
-pub const Func = fn (*Context, std.mem.Allocator, Node) anyerror!Node;
+pub const Func = fn (*Context, Node) anyerror!Node;
 
 var context_id_counter: u32 = 0;
+
+// Fixed-size memory pool for runtime allocations
+// This should be large enough for typical programs
+const MEMORY_POOL_SIZE = 1024 * 1024 * 4; // 4MB
 
 pub const Context = struct {
     const Self = @This();
@@ -19,6 +23,11 @@ pub const Context = struct {
     ids: std.StringHashMap(Node),
     strings: std.ArrayList(std.ArrayList(u8)),
     loaded_modules: std.StringHashMap(void),
+
+    // Memory pool for runtime allocations
+    pool_buffer: []u8 = undefined,
+    pool_allocator: std.mem.Allocator = undefined,
+    pool_fba: std.heap.FixedBufferAllocator = undefined,
 
     context_id: u32 = 0,
     lambda_counter: u64 = 0,
@@ -33,16 +42,9 @@ pub const Context = struct {
         self: *Self,
         allocator: std.mem.Allocator,
     ) void {
-        var keys = self.ids.keyIterator();
-        while (keys.next()) |key| {
-            if (self.ids.get(key.*)) |*node| {
-                node.deinit(allocator);
-            }
-        }
-        for (self.strings.items) |*str| {
-            str.deinit(allocator);
-        }
-        self.strings.deinit(allocator);
+        // Don't deinit pool-allocated nodes/strings - FixedBufferAllocator doesn't support
+        // individual frees. The pool buffer will be freed below, which reclaims all memory.
+        // Just clear the hash maps and array lists (they were allocated externally).
         self.loaded_modules.clearAndFree();
         self.funcs.clearAndFree();
         self.lazy_funcs.clearAndFree();
@@ -51,19 +53,31 @@ pub const Context = struct {
         self.lazy_funcs.deinit();
         self.ids.deinit();
         self.loaded_modules.deinit();
+        // Free the pool buffer (this reclaims all pool-allocated memory)
+        allocator.free(self.pool_buffer);
     }
 
     pub fn init(allocator: std.mem.Allocator) !Self {
         context_id_counter += 1;
+        // Allocate the pool buffer on the heap
+        const pool_buffer = try allocator.alloc(u8, MEMORY_POOL_SIZE);
+        errdefer allocator.free(pool_buffer);
+
         var ctx = Self{
             .funcs = std.StringHashMap(*const Func).init(allocator),
             .lazy_funcs = std.StringHashMap(*const Func).init(allocator),
             .ids = std.StringHashMap(Node).init(allocator),
             .strings = std.ArrayList(std.ArrayList(u8)).empty,
             .loaded_modules = std.StringHashMap(void).init(allocator),
+            .pool_buffer = pool_buffer,
+            .pool_allocator = undefined,
+            .pool_fba = undefined,
             .context_id = context_id_counter,
             .lambda_counter = 0,
         };
+        // Initialize the memory pool
+        ctx.pool_fba = std.heap.FixedBufferAllocator.init(ctx.pool_buffer);
+        ctx.pool_allocator = ctx.pool_fba.allocator();
         errdefer ctx.deinit(allocator);
         try sac.registerBuiltins(&ctx);
         return ctx;
@@ -72,6 +86,18 @@ pub const Context = struct {
     pub fn next_lambda_id(self: *Self) u64 {
         self.lambda_counter += 1;
         return self.lambda_counter;
+    }
+
+    pub fn reset_pool(self: *Self) void {
+        // Reset the pool allocator by reinitializing it
+        // This allows reusing the same context across multiple evaluations
+        self.pool_fba = std.heap.FixedBufferAllocator.init(self.pool_buffer);
+        self.pool_allocator = self.pool_fba.allocator();
+        // Clear the ids and strings that were pool-allocated
+        // Note: We can't free individual pool allocations, so we just clear the containers
+        // The pool memory will be reused on the next allocation
+        self.ids.clearRetainingCapacity();
+        self.strings.clearRetainingCapacity();
     }
 
     pub fn register_func(self: *Self, name: []const u8, func: *const Func) !void {

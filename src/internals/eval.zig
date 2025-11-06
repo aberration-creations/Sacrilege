@@ -18,9 +18,9 @@ pub const EvalError = error{
 
 pub fn eval(
     ctx: *Context,
-    allocator: std.mem.Allocator,
     node: Node,
 ) !Node {
+    const allocator = ctx.pool_allocator;
     switch (node) {
         NodeType.atom => {
             // Resolve identifiers to their stored values in the context (for
@@ -48,7 +48,7 @@ pub fn eval(
                     const idfo = ctx.lazy_funcs.get(idn);
                     if (idfo) |idf| {
                         // Evaluate it.
-                        return try idf(ctx, allocator, node);
+                        return try idf(ctx, node);
                     }
                 }
             }
@@ -56,11 +56,12 @@ pub fn eval(
             // Eager evaluation rules past this point.
             var evald = Node{ .sexpr = std.ArrayList(Node).empty };
             var evald_active = true;
-            defer {
-                if (evald_active) {
-                    evald.deinit(allocator);
-                }
-            }
+            // Don't deinit pool-allocated nodes - FixedBufferAllocator doesn't support individual frees
+            // defer {
+            //     if (evald_active) {
+            //         evald.deinit(allocator);
+            //     }
+            // }
 
             // Evaluate arguments but do NOT resolve the operator identifier
             // into its stored value. The operator should remain an atom so
@@ -72,11 +73,11 @@ pub fn eval(
                 if (op == NodeType.atom and op.atom.id == TokenType.identifier) {
                     try evald.sexpr.append(allocator, try op.copy(allocator));
                 } else {
-                    const eop = try eval(ctx, allocator, op);
+                    const eop = try eval(ctx, op);
                     try evald.sexpr.append(allocator, eop);
                 }
                 for (node.sexpr.items[1..]) |arg| {
-                    const earg = try eval(ctx, allocator, arg);
+                    const earg = try eval(ctx, arg);
                     try evald.sexpr.append(allocator, earg);
                 }
             }
@@ -93,11 +94,7 @@ pub fn eval(
 
                         // Recursively evaluate 'eval' calls.
                         const it = evald.sexpr.items[1];
-                        return try eval(
-                            ctx,
-                            allocator,
-                            it,
-                        );
+                        return try eval(ctx, it);
                     } else if (std.mem.eql(u8, idn, "true")) {
                         // Refuse to evaluate boolean identifiers.
                         evald_active = false;
@@ -117,7 +114,7 @@ pub fn eval(
 
                     if (idfo) |idf| {
                         // Evaluate it.
-                        return try idf(ctx, allocator, evald);
+                        return try idf(ctx, evald);
                     }
                     // Fast path: if operator identifier is an alias bound to another
                     // identifier that names a registered function, swap and call it.
@@ -125,9 +122,9 @@ pub fn eval(
                         if (alias_val == NodeType.atom and alias_val.atom.id == TokenType.identifier) {
                             const alt = alias_val.atom.raw.items;
                             if (ctx.funcs.get(alt)) |aidf| {
-                                evald.sexpr.items[0].deinit(allocator);
+                                // Don't deinit pool-allocated nodes
                                 evald.sexpr.items[0] = try alias_val.copy(allocator);
-                                return try aidf(ctx, allocator, evald);
+                                return try aidf(ctx, evald);
                             }
                         }
                     }
@@ -197,7 +194,7 @@ pub fn eval(
                                     } else {
                                         have2 = true;
                                     }
-                                    res2 = try eval(ctx, allocator, body2);
+                                    res2 = try eval(ctx, body2);
                                 }
                                 return res2;
                             }
@@ -259,7 +256,7 @@ pub fn eval(
                                     have_result = true;
                                     result.deinit(allocator);
                                 }
-                                result = try eval(ctx, allocator, body);
+                                result = try eval(ctx, body);
                             }
                             if (!have_result) return result;
                             return result;
@@ -339,7 +336,7 @@ pub fn eval(
                             have_result = true;
                             result.deinit(allocator);
                         }
-                        result = try eval(ctx, allocator, body);
+                        result = try eval(ctx, body);
                     }
                     if (!have_result) {
                         return result;
