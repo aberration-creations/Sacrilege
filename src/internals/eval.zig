@@ -56,12 +56,6 @@ pub fn eval(
             // Eager evaluation rules past this point.
             var evald = Node{ .sexpr = std.ArrayList(Node).empty };
             var evald_active = true;
-            // Don't deinit pool-allocated nodes - FixedBufferAllocator doesn't support individual frees
-            // defer {
-            //     if (evald_active) {
-            //         evald.deinit(allocator);
-            //     }
-            // }
 
             // Evaluate arguments but do NOT resolve the operator identifier
             // into its stored value. The operator should remain an atom so
@@ -107,10 +101,6 @@ pub fn eval(
                     // Not an eval call - try resolving the identifier using the eager
                     // function dictionary.
                     const idfo = ctx.funcs.get(idn);
-                    // evald will be deinitialized by the errdefer above on error
-                    // and by the normal control flow after the call returns.
-                    // Avoid double-deinit here.
-                    //defer evald.deinit(allocator);
 
                     if (idfo) |idf| {
                         // Evaluate it.

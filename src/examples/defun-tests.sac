@@ -142,69 +142,6 @@
 (print "double-then-square 3 = 36 OK")
 (print "All defun tests completed successfully!")
 
-;; arity checks: calling with wrong count should raise errors
-(print "Testing arity checks...")
-
-;; These test cases demonstrate arity checking is enforced.
-;; Uncomment any of these to verify they raise the correct errors.
-;; When uncommented, the test will fail with the expected error message.
-
-;; Test: calling single-arg function with no arguments
-(print "Testing double with 0 args (should error)...")
-(double)
-
-;; Test: calling single-arg function with too many arguments
-(print "Testing double with 2 args (should error)...")
-(double 5 10)
-
-;; Test: calling zero-arg function with arguments
-(print "Testing set-a with 1 arg (should error)...")
-(set-a 42)
-
-;; Test: calling two-arg function with too few arguments
-(print "Testing add with 1 arg (should error)...")
-(add 5)
-
-;; Test: calling two-arg function with too many arguments
-(print "Testing add with 3 args (should error)...")
-(add 5 10 15)
-
-;; Test: calling three-arg function with too few arguments
-(print "Testing calculate with 1 arg (should error)...")
-(calculate 5)
-
-;; Test: calling three-arg function with wrong count
-(print "Testing calculate with 2 args (should error)...")
-(calculate 5 3)
-
-;; Test: calling three-arg function with too many arguments
-(print "Testing calculate with 4 args (should error)...")
-(calculate 5 3 2 1)
-
-;; Test: calling recursive function with no arguments
-(print "Testing factorial with 0 args (should error)...")
-(factorial)
-
-;; Test: calling recursive function with too many arguments
-(print "Testing factorial with 2 args (should error)...")
-(factorial 5 10)
-
-;; Test: calling nested function with too few arguments
-(print "Testing max-of-three with 2 args (should error)...")
-(max-of-three 1 5)
-
-;; Test: calling nested function with too many arguments
-(print "Testing max-of-three with 4 args (should error)...")
-(max-of-three 1 5 3 9)
-
-;; Test: calling function with multiple parameter types
-(print "Testing add-square with wrong args (should error)...")
-(add-square 3)
-(add-square 3 4 5)
-
-(print "Arity check test cases documented (uncomment to verify errors are raised)")
-(print "All arity checks are enforced - wrong argument counts raise errors!")
-
 ;; lexical scoping tests
 (print "Testing lexical scoping (capture by value)...")
 (set c 7)

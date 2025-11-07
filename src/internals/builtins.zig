@@ -869,12 +869,11 @@ fn builtin_not(ctx: *Context, node: Node) anyerror!Node {
 
 fn builtin_cdr(ctx: *Context, node: Node) anyerror!Node {
     const allocator = ctx.pool_allocator;
-    // TODO check argument counts
+    if (node.sexpr.items.len < 2) {
+        return EvalError.WrongArgumentCount;
+    }
     if (node.sexpr.items[1] != NodeType.sexpr) {
         return EvalError.WrongArgumentType;
-    }
-    if (node.sexpr.items.len == 0) {
-        return EvalError.WrongArgumentCount;
     }
     var out = Node.new_sexpr();
     var idx: usize = 1;

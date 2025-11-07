@@ -31,6 +31,47 @@
 ;; when last is atom, we approximate to (list 1 2 3)
 (assert (eq (list* 1 2 3) (list 1 2 3)))
 
+;; Lists with strings
+(print "Testing lists with strings...")
+
+;; Basic string list operations
+(assert (eq (car (list "hello" "world" "test")) "hello"))
+(assert (eq (elem 2 (list "hello" "world" "test")) "world"))
+(assert (eq (last (list "hello" "world" "test")) "test"))
+(assert (eq (len (list "hello" "world" "test")) 3))
+
+;; String lists with cons and append
+(assert (eq (car (cons "first" (list "second" "third"))) "first"))
+(assert (eq (last (append (list "a" "b") "c" "d")) "d"))
+(assert (eq (len (append (list "x" "y") "z")) 3))
+
+;; Mixed types (strings and numbers)
+(assert (eq (car (list "hello" 42 "world")) "hello"))
+(assert (eq (elem 2 (list "hello" 42 "world")) 42))
+(assert (eq (last (list "hello" 42 "world")) "world"))
+
+;; Advanced string list operations
+(assert (eq (list-ref (list "zero" "one" "two") 0) "zero"))
+(assert (eq (list-ref (list "zero" "one" "two") 2) "two"))
+(assert (eq (car (list-tail (list "a" "b" "c" "d") 2)) "c"))
+(assert (eq (car (reverse (list "first" "second" "third"))) "third"))
+(assert (eq (last (reverse (list "first" "second" "third"))) "first"))
+
+;; String list predicates
+(assert (eq (empty? (list)) true))
+(assert (eq (empty? (list "item")) false))
+(assert (eq (list? (list "a" "b")) true))
+(assert (eq (pair? (list "a" "b")) true))
+(assert (eq (pair? (list)) false))
+
+;; String equality in lists
+(assert (eq (car (list "test")) "test"))
+(assert (eq (eq (car (list "hello")) "world") false))
+(assert (eq (eq (elem 3 (list "a" "b" "c")) "c") true))
+
+;; list* with strings
+(assert (eq (car (list* "a" "b" (list "c" "d"))) "a"))
+(assert (eq (last (list* "a" "b" (list "c" "d"))) "d"))
+(assert (eq (len (list* "x" "y" "z")) 3))
+
 (print "All advanced list tests completed successfully!")
-
-
