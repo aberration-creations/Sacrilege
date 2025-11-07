@@ -29,6 +29,8 @@ pub const Context = struct {
     pool_allocator: std.mem.Allocator = undefined,
     pool_fba: std.heap.FixedBufferAllocator = undefined,
 
+    allocator: ?std.mem.Allocator = null,
+
     context_id: u32 = 0,
     lambda_counter: u64 = 0,
     is_error: bool = false,
@@ -58,6 +60,10 @@ pub const Context = struct {
     }
 
     pub fn init(allocator: std.mem.Allocator) !Self {
+        return initWithExternalAllocator(allocator, null);
+    }
+
+    pub fn initWithExternalAllocator(allocator: std.mem.Allocator, external_allocator: ?std.mem.Allocator) !Self {
         context_id_counter += 1;
         // Allocate the pool buffer on the heap
         const pool_buffer = try allocator.alloc(u8, MEMORY_POOL_SIZE);
@@ -72,6 +78,7 @@ pub const Context = struct {
             .pool_buffer = pool_buffer,
             .pool_allocator = undefined,
             .pool_fba = undefined,
+            .allocator = external_allocator,
             .context_id = context_id_counter,
             .lambda_counter = 0,
         };
